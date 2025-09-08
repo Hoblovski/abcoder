@@ -73,6 +73,7 @@ func main() {
 	flagVerbose := flags.Bool("verbose", false, "Verbose mode.")
 	flagOutput := flags.String("o", "", "Output path.")
 	flagLsp := flags.String("lsp", "", "Specify the language server path.")
+	flagLspFlags := flags.String("lsp-flags", "", "Specify the language server flags.")
 	flagProfile := flags.String("profile", "", "Specify the CPU profile data path. Leave empty to disable profiling.")
 
 	var opts lang.ParseOptions
@@ -151,6 +152,9 @@ func main() {
 
 		if flagLsp != nil {
 			opts.LSP = *flagLsp
+		}
+		if flagLspFlags != nil {
+			opts.LSPFlags = strings.Fields(*flagLspFlags)
 		}
 
 		out, err := lang.Parse(context.Background(), uri, opts)

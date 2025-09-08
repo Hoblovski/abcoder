@@ -43,6 +43,7 @@ type LSPClient struct {
 
 type ClientOptions struct {
 	Server string
+	Flags  []string
 	uniast.Language
 	Verbose bool
 	// for lsp cache
@@ -52,7 +53,7 @@ type ClientOptions struct {
 
 func NewLSPClient(repo string, openfile string, wait time.Duration, opts ClientOptions) (*LSPClient, error) {
 	// launch golang LSP server
-	svr, err := startLSPSever(opts.Server)
+	svr, err := startLSPSever(opts.Server, opts.Flags)
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +167,10 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 	if !ok || !definitionProvider {
 		return nil, fmt.Errorf("server did not provide Definition")
 	}
-	typeDefinitionProvider, ok := vs["typeDefinitionProvider"].(bool)
-	if !ok || !typeDefinitionProvider {
-		return nil, fmt.Errorf("server did not provide TypeDefinition")
-	}
+	// typeDefinitionProvider, ok := vs["typeDefinitionProvider"].(bool)
+	// if !ok || !typeDefinitionProvider {
+	// 	return nil, fmt.Errorf("server did not provide TypeDefinition")
+	// }
 
 	documentSymbolProvider, ok := vs["documentSymbolProvider"].(bool)
 	if !ok || !documentSymbolProvider {
@@ -186,6 +187,7 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 		return nil, fmt.Errorf("server did not provide SemanticTokensProvider")
 	}
 	semanticTokensRange, ok := semanticTokensProvider["range"].(bool)
+	semanticTokensRange = false
 	cli.hasSemanticTokensRange = ok && semanticTokensRange
 	legend, ok := semanticTokensProvider["legend"].(map[string]interface{})
 	if !ok || legend == nil {
@@ -231,9 +233,9 @@ func (rwc rwc) Close() error {
 }
 
 // start a LSP process and return its io
-func startLSPSever(path string) (io.ReadWriteCloser, error) {
+func startLSPSever(path string, flags []string) (io.ReadWriteCloser, error) {
 	// Launch rust-analyzer
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, flags...)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

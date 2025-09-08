@@ -39,6 +39,8 @@ import (
 type ParseOptions struct {
 	// LSP sever executable path
 	LSP string
+	// LSP flags
+	LSPFlags []string
 	// Language of the repo
 	Verbose bool
 	collect.CollectOption
@@ -81,10 +83,12 @@ func Parse(ctx context.Context, uri string, args ParseOptions) ([]byte, error) {
 		var err error
 		client, err = lsp.NewLSPClient(uri, openfile, opentime, lsp.ClientOptions{
 			Server:           lspPath,
+			Flags:            args.LSPFlags,
 			Language:         l,
 			Verbose:          args.Verbose,
 			LSPCachePath:     args.LSPCachePath,
-			LSPCacheInterval: args.LSPCacheInterval})
+			LSPCacheInterval: args.LSPCacheInterval,
+		})
 		if err != nil {
 			log.Error("failed to initialize LSP server: %v\n", err)
 			return nil, err
