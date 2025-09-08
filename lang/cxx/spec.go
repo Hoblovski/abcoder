@@ -25,6 +25,7 @@ import (
 )
 
 type CxxSpec struct {
+	*lsp.DefaultSpecImpls
 	repo string
 }
 

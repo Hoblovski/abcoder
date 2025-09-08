@@ -30,6 +30,7 @@ import (
 var _ lsp.LanguageSpec = (*RustSpec)(nil)
 
 type RustSpec struct {
+	*lsp.DefaultSpecImpls
 	repo   string
 	crates []Module // path => name
 }

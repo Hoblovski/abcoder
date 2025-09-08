@@ -116,28 +116,6 @@ func NewCollector(repo string, cli *LSPClient) *Collector {
 	return ret
 }
 
-func (c *Collector) configureLSP(ctx context.Context) {
-	// XXX: should be put in language specification
-	if c.Language == uniast.Python {
-		if !c.NeedStdSymbol {
-			if c.Language == uniast.Python {
-				conf := map[string]interface{}{
-					"settings": map[string]interface{}{
-						"pylsp": map[string]interface{}{
-							"plugins": map[string]interface{}{
-								"jedi_definition": map[string]interface{}{
-									"follow_builtin_definitions": false,
-								},
-							},
-						},
-					},
-				}
-				c.cli.Notify(ctx, "workspace/didChangeConfiguration", conf)
-			}
-		}
-	}
-}
-
 func (c *Collector) addSym(sym *DocumentSymbol) {
 	c.syms[sym.Location] = sym
 	c.perFileSyms[sym.Location.URI.File()] = append(c.perFileSyms[sym.Location.URI.File()], sym)
@@ -170,6 +148,11 @@ func (c *Collector) collectFiles() {
 			return err
 		}
 		if info.IsDir() || c.spec.ShouldSkip(path) {
+			return nil
+		}
+		// check test files
+		if c.NotNeedTest && c.spec.IsTestFile(path) {
+			println("ignored test file ", path)
 			return nil
 		}
 		// check includes
@@ -347,7 +330,7 @@ func (c *Collector) collectDependency(ctx context.Context, sym *DocumentSymbol) 
 
 func (c *Collector) Collect(ctx context.Context) error {
 	log.Info("Collector.Collect() started")
-	c.configureLSP(ctx)
+	c.spec.ConfigureLSP(ctx, c.cli)
 
 	c.collectFiles()
 	// results:

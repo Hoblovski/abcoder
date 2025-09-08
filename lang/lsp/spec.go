@@ -15,6 +15,8 @@
 package lsp
 
 import (
+	"context"
+
 	"github.com/cloudwego/abcoder/lang/uniast"
 )
 
@@ -67,4 +69,19 @@ type LanguageSpec interface {
 
 	// Handle a unloaded internal symbol, like `lazy_static!` in rust
 	GetUnloadedSymbol(from Token, define Location) (string, error)
+
+	// Check whether the file is a test file
+	IsTestFile(path string) bool
+
+	ConfigureLSP(ctx context.Context, cli *LSPClient) error
+}
+
+type DefaultSpecImpls struct{}
+
+func (d *DefaultSpecImpls) IsTestFile(path string) bool {
+	return false
+}
+
+func (d *DefaultSpecImpls) ConfigureLSP(ctx context.Context, cli *LSPClient) error {
+	return nil
 }

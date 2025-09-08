@@ -15,6 +15,7 @@
 package python
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,6 +30,7 @@ import (
 )
 
 type PythonSpec struct {
+	*lsp.DefaultSpecImpls
 	repo          string
 	topModuleName string
 	topModulePath string
@@ -49,6 +51,32 @@ func NewPythonSpec() *PythonSpec {
 	})
 	log.Info("PythonSpec: using sysPaths %+v\n", sysPaths)
 	return &PythonSpec{sysPaths: sysPaths}
+}
+
+func (c *PythonSpec) IsTestFile(path string) bool {
+	return strings.HasPrefix(filepath.Base(path), "test_")
+	// || strings.HasSuffix(path, "_test.py")
+}
+
+func (c *PythonSpec) ConfigureLSP(ctx context.Context, cli *lsp.LSPClient) error {
+	// TODO
+	// if !c.NeedStdSymbol {
+	// 	if c.Language == uniast.Python {
+	conf := map[string]interface{}{
+		"settings": map[string]interface{}{
+			"pylsp": map[string]interface{}{
+				"plugins": map[string]interface{}{
+					"jedi_definition": map[string]interface{}{
+						"follow_builtin_definitions": false,
+					},
+				},
+			},
+		},
+	}
+	cli.Notify(ctx, "workspace/didChangeConfiguration", conf)
+	return nil
+	// 	}
+	// }
 }
 
 func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
