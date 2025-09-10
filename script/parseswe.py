@@ -33,7 +33,10 @@ INCLUDE = {
     "xarray": "xarray",
 }
 
-DEFAULT_COMMAND_TEMPLATE = "./abcoder parse python {repo_path} -verbose -o {outdir}/{instance_id}.json -include {include_path} -lsp-cache-path {outdir}/{instance_id}/lsp_cache.json"
+DEFAULT_COMMAND_TEMPLATES = {
+    "pylsp": "./abcoder parse python {repo_path} -verbose -o {outdir}/{instance_id}.json -include {include_path} -lsp-cache-path {outdir}/{instance_id}/lsp_cache.json",
+    "jedi": "./abcoder parse python {repo_path} -verbose -o {outdir}/{instance_id}.json -include {include_path} -lsp-cache-path {outdir}/{instance_id}/lsp_cache.json -lsp jedi-language-server -lsp-flags '--log-file {outdir}/{instance_id}/lsp.log -v'",
+}
 
 
 def compute_jobs(args):
@@ -65,7 +68,8 @@ def create_scripts(args, jobs):
             "instance_id": instance_id,
             "outdir": args.outdir,
         }
-        format_dict["command"] = args.command.format(**format_dict)
+        command = DEFAULT_COMMAND_TEMPLATES.get(args.command, args.command)
+        format_dict["command"] = command.format(**format_dict)
         with open(script_path, "w") as f:
             f.write(SCRIPT_TEMPLATE.format(**format_dict))
         os.chmod(script_path, 0o755)
@@ -104,8 +108,8 @@ def main():
     parser.add_argument(
         "-c",
         "--command",
-        default=DEFAULT_COMMAND_TEMPLATE,
-        help="The main command template",
+        default="jedi",
+        help="The main command template (can be a template or a name)",
     )
     parser.add_argument(
         "-p", "--parallel", action="store_true", help="Whether to run in parallel"
