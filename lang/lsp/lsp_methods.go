@@ -318,6 +318,9 @@ func (cli *LSPClient) GetParent(sym *DocumentSymbol) (ret *DocumentSymbol) {
 }
 
 func (cli *LSPClient) filterTokens(tokens []Token, range_ Range) []Token {
+	if len(tokens) == 0 {
+		return []Token{}
+	}
 	// tokens.Location.Range shall not overlap.
 	// tokens.Location.URI shall be the same (as range_).
 
