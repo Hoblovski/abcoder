@@ -7,6 +7,8 @@ from dzyswe import swelite, sweverif, sweall, reponame, repopath
 
 SCRIPT_TEMPLATE = """#!/bin/bash
 set -e
+# jedi caching
+export XDG_CACHE_HOME={outdir}/{instance_id}
 rm -rf {outdir}/{instance_id}/repo
 git clone {repo_path} {outdir}/{instance_id}/repo
 cd {outdir}/{instance_id}/repo
