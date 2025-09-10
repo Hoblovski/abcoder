@@ -128,10 +128,8 @@ func (c *PythonSpec) NameSpace(path string) (string, string, error) {
 	}
 
 	for _, sysPath := range c.sysPaths {
-		log.Error("PythonSpec: path %s sysPath %s\n", path, sysPath)
 		if strings.HasPrefix(path, sysPath) {
 			relPath, err := filepath.Rel(sysPath, path)
-			log.Error("PythonSpec: matched relPath %s, sysPath %s\n", relPath, sysPath)
 			if err != nil {
 				return "", "", err
 			}

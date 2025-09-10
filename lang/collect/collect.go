@@ -299,7 +299,7 @@ func (c *Collector) collectDependency(ctx context.Context, sym *DocumentSymbol) 
 
 		dep, err := c.getSymbolByToken(ctx, token)
 		if err != nil || dep == nil {
-			log.Error("collect_dependency: dep token %v not found: %v\n", token, err)
+			// log.Error("collect_dependency: dep token %v not found: %v\n", token, err)
 			continue
 		}
 
@@ -365,6 +365,7 @@ func (c *Collector) Collect(ctx context.Context) error {
 	// 		c.deps[sym]
 	// 		c.syms[dep.Location] for dep syms
 	log.Info("Collector.Collect() done")
+
 	return nil
 }
 
@@ -386,7 +387,7 @@ func (c *Collector) getSymbolByTokenWithLimit(ctx context.Context, tok Token, de
 		return nil, fmt.Errorf("definition of token %s not found", tok)
 	}
 	if len(defs) > 1 {
-		log.Error("definition of token %s not unique", tok)
+		// log.Error("definition of token %s not unique", tok)
 	}
 	return c.getSymbolByLocation(ctx, defs[0], depth, tok)
 }
@@ -559,7 +560,7 @@ func (c *Collector) getDepsWithLimit(ctx context.Context, sym *DocumentSymbol, t
 	for _, tp := range tps {
 		dep, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[tp], depth)
 		if err != nil || sym == nil {
-			log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
+			// log.Error_skip(1, "token %v not found its symbol: %v", tp, err)
 		} else {
 			d := dependency{sym.Tokens[tp].Location, dep}
 			tsyms[tp] = d
@@ -637,7 +638,7 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 		if !hasImpl && rec >= 0 {
 			rsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[rec], depth)
 			if err != nil || rsym == nil {
-				log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
+				// log.Error("get receiver symbol for token %v failed: %v\n", rec, err)
 			}
 		}
 		tsyms, ts := c.getDepsWithLimit(ctx, sym, tps, depth-1)
@@ -675,12 +676,12 @@ func (c *Collector) processSymbol(ctx context.Context, sym *DocumentSymbol, dept
 			}
 		}
 		if i < 0 || i >= len(sym.Tokens) {
-			log.Error("get type token of variable symbol %s failed\n", sym)
+			// log.Error("get type token of variable symbol %s failed\n", sym)
 			return
 		}
 		tsym, err := c.getSymbolByTokenWithLimit(ctx, sym.Tokens[i], depth-1)
 		if err != nil || tsym == nil {
-			log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
+			// log.Error("get type symbol for token %s failed:%v\n", sym.Tokens[i], err)
 			return
 		}
 		c.vars[sym] = dependency{
