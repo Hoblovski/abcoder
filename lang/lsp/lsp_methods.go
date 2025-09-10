@@ -117,59 +117,7 @@ func (cli *LSPClient) References(ctx context.Context, id Location) ([]Location, 
 	return resp, nil
 }
 
-// Some language servers do not provide semanticTokens/range.
-// In that case, we fall back to semanticTokens/full and then filter the tokens manually.
-func (cli *LSPClient) getSemanticTokensRange(ctx context.Context, req DocumentRange, resp *SemanticTokens) error {
-	if cli.hasSemanticTokensRange {
-		if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, resp); err != nil {
-			return err
-		}
-		return nil
-	}
-	// fall back to semanticTokens/full
-	req1 := SemanticTokensFullParams{
-		TextDocument: req.TextDocument,
-	}
-	if err := cli.Call(ctx, "textDocument/semanticTokens/full", req1, resp); err != nil {
-		return err
-	}
-	filterSemanticTokensInRange(resp, req.Range)
-	return nil
-}
-
-func filterSemanticTokensInRange(resp *SemanticTokens, r Range) {
-	curPos := Position{
-		Line:      0,
-		Character: 0,
-	}
-	newData := []uint32{}
-	includedIs := []int{}
-	for i := 0; i < len(resp.Data); i += 5 {
-		deltaLine := int(resp.Data[i])
-		deltaStart := int(resp.Data[i+1])
-		if deltaLine != 0 {
-			curPos.Line += deltaLine
-			curPos.Character = deltaStart
-		} else {
-			curPos.Character += deltaStart
-		}
-		if isPositionInRange(curPos, r, true) {
-			if len(newData) == 0 {
-				// add range start to initial delta
-				newData = append(newData, resp.Data[i:i+5]...)
-				newData[0] = uint32(curPos.Line)
-				newData[1] = uint32(curPos.Character)
-			} else {
-				newData = append(newData, resp.Data[i:i+5]...)
-			}
-			includedIs = append(includedIs, i)
-		}
-	}
-	resp.Data = newData
-}
-
 func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token, error) {
-	// open file first
 	syms, err := cli.DocumentSymbols(ctx, id.URI)
 	if err != nil {
 		return nil, err
@@ -179,20 +127,46 @@ func (cli *LSPClient) SemanticTokens(ctx context.Context, id Location) ([]Token,
 		return sym.Tokens, nil
 	}
 
-	uri := lsp.DocumentURI(id.URI)
+	if cli.hasSemanticTokensRange {
+		return cli.semanticTokensRange(ctx, id, sym)
+	} else {
+		return cli.semanticTokensFull(ctx, id, sym)
+	}
+}
+
+func (cli *LSPClient) semanticTokensRange(ctx context.Context, id Location, sym *DocumentSymbol) ([]Token, error) {
 	req := DocumentRange{
 		TextDocument: lsp.TextDocumentIdentifier{
-			URI: uri,
+			URI: lsp.DocumentURI(id.URI),
 		},
 		Range: id.Range,
 	}
-
 	var resp SemanticTokens
-	if err := cli.getSemanticTokensRange(ctx, req, &resp); err != nil {
+	if err := cli.Call(ctx, "textDocument/semanticTokens/range", req, &resp); err != nil {
 		return nil, err
 	}
+	toks := cli.parseTokens(resp, id.URI)
+	if sym != nil {
+		sym.Tokens = toks
+	}
+	return toks, nil
+}
 
-	toks := cli.getAllTokens(resp, id.URI)
+func (cli *LSPClient) semanticTokensFull(ctx context.Context, id Location, sym *DocumentSymbol) ([]Token, error) {
+	f, ok := cli.files[id.URI]
+	if !ok || f.Tokens == nil {
+		req := SemanticTokensFullParams{
+			TextDocument: lsp.TextDocumentIdentifier{
+				URI: lsp.DocumentURI(id.URI),
+			},
+		}
+		var resp SemanticTokens
+		if err := cli.Call(ctx, "textDocument/semanticTokens/full", req, &resp); err != nil {
+			return nil, err
+		}
+		f.Tokens = cli.parseTokens(resp, id.URI)
+	}
+	toks := cli.filterTokens(f.Tokens, id.Range)
 	if sym != nil {
 		sym.Tokens = toks
 	}
@@ -343,23 +317,68 @@ func (cli *LSPClient) GetParent(sym *DocumentSymbol) (ret *DocumentSymbol) {
 	return
 }
 
-func (cli *LSPClient) getAllTokens(tokens SemanticTokens, file DocumentURI) []Token {
-	start := Position{Line: 0, Character: 0}
-	end := Position{Line: math.MaxInt32, Character: math.MaxInt32}
-	return cli.getRangeTokens(tokens, file, Range{Start: start, End: end})
+func (cli *LSPClient) filterTokens(tokens []Token, range_ Range) []Token {
+	// tokens.Location.Range shall not overlap.
+	// tokens.Location.URI shall be the same (as range_).
+
+	// bisect to find left
+	l, r := 0, len(tokens)-1
+	for l < r {
+		mid := (l + r) / 2
+		midRange := tokens[mid].Location.Range
+		if midRange.Start.Less(range_.Start) {
+			// discard until mid, discard mid (FALSE== mid.Start>=range_.Start)
+			l = mid + 1
+		} else {
+			// discard after mid, keep mid (TRUE== mid.Start>=range_.Start)
+			r = mid
+		}
+	}
+	leftIndex := l
+	// leftIndex: the first tok such that tok.Start >= range_.Start
+	// all tokens before leftIndex are out of range
+	// ---
+	// bisect to find right
+	l, r = 0, len(tokens)-1 // interval: [l, r] inclusive x2
+	for l < r {
+		mid := (l + r) / 2
+		midRange := tokens[mid].Location.Range
+		if midRange.Start.Less(range_.End) {
+			// (FALSE== mid.Start>=range_.End)
+			l = mid + 1
+		} else {
+			r = mid
+		}
+	}
+	rightIndex := l
+	// rightIndex: the first tok such that tok.Start >= range_.End
+	// all tokens at or after rightIndex are out of range
+	// ---
+	for rightIndex >= leftIndex && !range_.Include(tokens[rightIndex].Location.Range) {
+		rightIndex -= 1
+	}
+	// rightIndex: the last tok such that range_.Include(tok)
+	res := tokens[leftIndex : rightIndex+1]
+	return res
 }
 
-func (cli *LSPClient) getRangeTokens(tokens SemanticTokens, file DocumentURI, r Range) []Token {
-	symbols := make([]Token, 0, len(tokens.Data)/5)
+func (cli *LSPClient) parseTokens(tokens SemanticTokens, file DocumentURI) []Token {
+	start := Position{Line: 0, Character: 0}
+	end := Position{Line: math.MaxInt32, Character: math.MaxInt32}
+	return cli.parseTokensRange(tokens, file, Range{Start: start, End: end})
+}
+
+func (cli *LSPClient) parseTokensRange(raw_tokens SemanticTokens, file DocumentURI, r Range) []Token {
+	tokens := make([]Token, 0, len(raw_tokens.Data)/5)
 	line := 0
 	character := 0
 
-	for i := 0; i < len(tokens.Data); i += 5 {
-		deltaLine := int(tokens.Data[i])
-		deltaStart := int(tokens.Data[i+1])
-		length := int(tokens.Data[i+2])
-		tokenType := int(tokens.Data[i+3])
-		tokenModifiersBitset := int(tokens.Data[i+4])
+	for i := 0; i < len(raw_tokens.Data); i += 5 {
+		deltaLine := int(raw_tokens.Data[i])
+		deltaStart := int(raw_tokens.Data[i+1])
+		length := int(raw_tokens.Data[i+2])
+		tokenType := int(raw_tokens.Data[i+3])
+		tokenModifiersBitset := int(raw_tokens.Data[i+4])
 
 		line += deltaLine
 		if deltaLine == 0 {
@@ -368,14 +387,15 @@ func (cli *LSPClient) getRangeTokens(tokens SemanticTokens, file DocumentURI, r 
 			character = deltaStart
 		}
 
-		currentPos := Position{Line: line, Character: character}
-		if isPositionInRange(currentPos, r, false) {
-			// fmt.Printf("Token at line %d, character %d, length %d, type %d, modifiers %b\n", line, character, length, tokenType, tokenModifiersBitset)
+		start := Position{Line: line, Character: character}
+		if isPositionInRange(start, r, false) {
 			tokenTypeName := getSemanticTokenType(tokenType, cli.tokenTypes)
 			tokenModifierNames := getSemanticTokenModifier(tokenModifiersBitset, cli.tokenModifiers)
-			loc := Location{URI: file, Range: Range{Start: currentPos, End: Position{Line: line, Character: character + length}}}
+			end := Position{Line: line, Character: character + length}
+			range_ := Range{Start: start, End: end}
+			loc := Location{URI: file, Range: range_}
 			text, _ := cli.Locate(loc)
-			symbols = append(symbols, Token{
+			tokens = append(tokens, Token{
 				Location:  loc,
 				Type:      tokenTypeName,
 				Modifiers: tokenModifierNames,
@@ -384,18 +404,7 @@ func (cli *LSPClient) getRangeTokens(tokens SemanticTokens, file DocumentURI, r 
 		}
 	}
 
-	// sort it by start position
-	sort.Slice(symbols, func(i, j int) bool {
-		if symbols[i].Location.URI != symbols[j].Location.URI {
-			return symbols[i].Location.URI < symbols[j].Location.URI
-		}
-		if symbols[i].Location.Range.Start.Line != symbols[j].Location.Range.Start.Line {
-			return symbols[i].Location.Range.Start.Line < symbols[j].Location.Range.Start.Line
-		}
-		return symbols[i].Location.Range.Start.Character < symbols[j].Location.Range.Start.Character
-	})
-
-	return symbols
+	return tokens
 }
 
 func (cli *LSPClient) FileStructure(ctx context.Context, file DocumentURI) ([]*DocumentSymbol, error) {

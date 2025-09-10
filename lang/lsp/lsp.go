@@ -176,6 +176,7 @@ type TextDocumentItem struct {
 	Version     int                       `json:"version"`
 	Text        string                    `json:"text"`
 	LineCounts  []int                     `json:"-"`
+	Tokens      []Token                   `json:"-"` // location is sorted
 	Symbols     map[Range]*DocumentSymbol `json:"-"`
 	Definitions map[Position][]Location   `json:"-"`
 }
