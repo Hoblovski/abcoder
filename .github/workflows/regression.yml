@@ -29,6 +29,12 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Checkout pull request code
         uses: actions/checkout@v4
         with:
@@ -48,13 +54,20 @@ jobs:
 
       - name: Compile both binaries
         run: |
-          (cd main_repo && go build -o ../abcoder_old)
+          (cd main_repo && go build -o ../pr_repo/abcoder_old)
           (cd pr_repo && go build -o ../abcoder_new)
 
-      - name: Run test scripts and generate outputs
-        run: |
-          LANGS="go rust python" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_all_testdata.sh
-          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_all_testdata.sh
+      - name: Install LSPs
+        run:
+          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
+
+      - name: Run OLD abcoder
+        run:
+          LANGS="go rust python" OUTDIR=out_old ABCEXE=./abcoder_old ./pr_repo/script/run_testdata.sh all
+
+      - name: Run NEW abcoder
+        run:
+          LANGS="go rust python" OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh all
 
       - name: Compare outputs and check for regression
         id: diff_check
