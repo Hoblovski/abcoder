@@ -53,6 +53,9 @@ jobs:
           (cd main_repo && go build -o ../abcoder_old)
           (cd pr_repo && go build -o ../abcoder_new)
 
+      - name: Install evaluation dependencies
+        run: pip install -r ./pr_repo/script/requirements.txt
+
       - name: Install LSPs
         run: |
           OUTDIR=out_new ABCEXE=./abcoder_new ./pr_repo/script/run_testdata.sh first
@@ -68,7 +71,7 @@ jobs:
 
       - name: Compare outputs and check for regression
         id: diff_check
-        run: ./pr_repo/script/diffjson.py out_old out_new
+        run: ./pr_repo/script/diffjson.py out_old out_new || echo "failed=true" >> $GITHUB_OUTPUT
         continue-on-error: true
 
       - name: Upload output directories
@@ -80,3 +83,7 @@ jobs:
             out_old
             out_new
           retention-days: 3
+
+      - name: Status check
+        if: steps.diff_check.outputs.failed == 'true'
+        run: exit 1
