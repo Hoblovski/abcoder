@@ -79,8 +79,40 @@ func (c *PythonSpec) ConfigureLSP(ctx context.Context, cli *lsp.LSPClient) error
 	// }
 }
 
+var sweInclude = map[string]string{
+	"flask":        "src",
+	"matplotlib":   "lib/matplotlib",
+	"pytest":       "src",
+	"astropy":      "astropy",
+	"scikit-learn": "sklearn",
+	"seaborn":      "seaborn",
+	"sympy":        "sympy",
+	"django":       "django",
+	"pylint":       "pylint",
+	"requests":     "src",
+	"sphinx":       "sphinx",
+	"xarray":       "xarray",
+}
+
+func (c *PythonSpec) SWEWorkSpace(root string) (map[string]string, error) {
+	rets := map[string]string{}
+	repoName := filepath.Base(root)
+	inc, ok := sweInclude[repoName]
+	if !ok {
+		return nil, fmt.Errorf("not a swe project")
+	}
+	c.topModulePath = root + "/" + inc
+	c.topModuleName = repoName
+	rets[c.topModuleName] = c.topModulePath
+	return rets, nil
+}
+
 func (c *PythonSpec) WorkSpace(root string) (map[string]string, error) {
 	c.repo = root
+	// hack for swe
+	if res, err := c.SWEWorkSpace(root); err == nil {
+		return res, nil
+	}
 	rets := map[string]string{}
 	absPath, err := filepath.Abs(root)
 	if err != nil {
