@@ -341,7 +341,10 @@ func (c *Collector) Collect(ctx context.Context) error {
 
 	log.Info("processing root symbols (tot=%d)...", len(root_syms))
 	entity_syms := make([]*DocumentSymbol, 0, len(root_syms))
-	for _, sym := range root_syms {
+	for i, sym := range root_syms {
+		if i%100 == 0 {
+			log.Info("    processing %d/%d root symbols", i, len(root_syms))
+		}
 		c.processSymbol(ctx, sym, 1)
 		if c.spec.IsEntitySymbol(*sym) {
 			entity_syms = append(entity_syms, sym)
