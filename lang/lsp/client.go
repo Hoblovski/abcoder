@@ -141,8 +141,10 @@ func initLSPClient(ctx context.Context, svr io.ReadWriteCloser, dir DocumentURI,
 
 	// NOTICE: some features need to be enabled explicitly
 	cs := map[string]interface{}{
-		"documentSymbol": map[string]interface{}{
-			"hierarchicalDocumentSymbolSupport": true,
+		"textDocument": map[string]interface{}{
+			"documentSymbol": map[string]interface{}{
+				"hierarchicalDocumentSymbolSupport": true,
+			},
 		},
 	}
 
