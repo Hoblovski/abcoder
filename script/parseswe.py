@@ -34,11 +34,17 @@ INCLUDE = {
 }
 
 DEFAULT_COMMAND_TEMPLATES = {
-    "pylsp": "./abcoder parse python {repo_path} -no-need-test -verbose -o {outdir}/{instance_id}.json -include {include_path} " +
-            "-lsp-cache-path {outdir}/{instance_id}/lsp_cache.json",
-    "jedi":  "./abcoder parse python {repo_path} -no-need-test -verbose -o {outdir}/{instance_id}.json -include {include_path} " +
-            "-lsp-cache-path {outdir}/{instance_id}/lsp_cache.json " +
-            "-lsp jedi-language-server -lsp-flags '--log-file {outdir}/{instance_id}/lsp.log -v'",
+    "pylsp": (
+        "./abcoder parse python {repo_path} -no-need-test -verbose "
+        "-o {outdir}/{instance_id}.json -include {include_path} "
+        "-lsp-cache-path {outdir}/{instance_id}/lsp_cache.json"
+    ),
+    "jedi": (
+        "./abcoder parse python {repo_path} -no-need-test -verbose "
+        "-o {outdir}/{instance_id}.json -include {include_path} "
+        "-lsp-cache-path {outdir}/{instance_id}/lsp_cache.json "
+        "-lsp jedi-language-server -lsp-flags '--log-file {outdir}/{instance_id}/lsp.log -v'"
+    ),
 }
 
 
@@ -47,7 +53,7 @@ def compute_jobs(args):
     for instance_id in args.instance_ids:
         info = sweall[instance_id]
         base_commit = info["base_commit"]
-        repo_path = repopath(instance_id)
+        repo_path = f'{args.outdir}/{instance_id}/repo'
         jobs.append(
             {"instance_id": instance_id, "repo_path": repo_path, "commit": base_commit}
         )
