@@ -676,7 +676,62 @@ export class FunctionParser {
     }
 
     for (const typeNode of typeNodes) {
-      // Handle union and intersection types by extracting individual type references
+      // First, try to extract the direct type reference from the typeNode itself
+      // This handles type aliases like "Status" which reference union types
+      let directSymbol: Symbol | undefined;
+
+      // For TypeReferenceNode, get the symbol from the type name
+      if (Node.isTypeReference(typeNode)) {
+        const typeName = typeNode.getTypeName();
+        if (Node.isIdentifier(typeName)) {
+          directSymbol = typeName.getSymbol();
+        } else if (Node.isQualifiedName(typeName)) {
+          directSymbol = typeName.getRight().getSymbol();
+        }
+      } else {
+        // For other type nodes, try to get symbol from the type itself
+        const typeObj = typeNode.getType();
+        directSymbol = typeObj.getSymbol() || typeNode.getSymbol();
+      }
+
+      if (directSymbol) {
+        const directTypeName = directSymbol.getName();
+        if (!this.isPrimitiveType(directTypeName)) {
+          const [resolvedSymbol, resolvedRealSymbol] = this.symbolResolver.resolveSymbol(directSymbol, typeNode);
+          if (resolvedSymbol && !resolvedSymbol.isExternal) {
+            const decls = resolvedRealSymbol?.getDeclarations() || [];
+            if (decls.length > 0) {
+              const defStartOffset = decls[0].getStart();
+              const defEndOffset = decls[0].getEnd();
+              const key = `${resolvedSymbol.moduleName}?${resolvedSymbol.packagePath}#${resolvedSymbol.name}`;
+
+              // Check if this is a self-reference (type reference within its own definition)
+              const isSelfReference = (
+                resolvedSymbol.moduleName === moduleName &&
+                this.getPkgPath(resolvedSymbol.packagePath || packagePath) === packagePath &&
+                defStartOffset <= resolvedSymbol.startOffset &&
+                resolvedSymbol.endOffset <= defEndOffset
+              );
+
+              if (!visited.has(key) && !isSelfReference) {
+                visited.add(key);
+                const dep: Dependency = {
+                  ModPath: resolvedSymbol.moduleName || moduleName,
+                  PkgPath: this.getPkgPath(resolvedSymbol.packagePath || packagePath),
+                  Name: resolvedSymbol.name,
+                  File: resolvedSymbol.filePath,
+                  Line: resolvedSymbol.line,
+                  StartOffset: resolvedSymbol.startOffset,
+                  EndOffset: resolvedSymbol.endOffset
+                };
+                types.push(dep);
+              }
+            }
+          }
+        }
+      }
+
+      // Then handle union and intersection types by extracting individual type references
       const typeReferences = this.dependencyUtils.extractAtomicTypeReferences(typeNode);
 
       for (const typeRef of typeReferences) {
@@ -720,11 +775,12 @@ export class FunctionParser {
           EndOffset: resolvedSymbol.endOffset
         };
 
+        // Check if this is a self-reference (type reference within its own definition)
         if (
           dep.ModPath === moduleName &&
           dep.PkgPath === packagePath &&
-          defEndOffset <= node.getEnd() &&
-          defStartOffset >= node.getStart()
+          defStartOffset <= resolvedSymbol.startOffset &&
+          resolvedSymbol.endOffset <= defEndOffset
         ) {
           continue;
         }
